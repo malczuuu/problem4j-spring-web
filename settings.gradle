@@ -5,5 +5,3 @@ pluginManagement {
 }
 
 rootProject.name = "problem4j-spring-web"
-
-include ":problem4j-spring-web"
