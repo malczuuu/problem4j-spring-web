@@ -1,0 +1,52 @@
+plugins {
+    id "java-library"
+    id "maven-publish"
+}
+
+group = "com.github.malczuuu"
+version = "3.0.0-SNAPSHOT"
+
+sourceCompatibility = "17"
+targetCompatibility = "17"
+
+repositories {
+    mavenCentral()
+    maven { url "https://jitpack.io/" }
+}
+
+dependencies {
+
+    compileOnly("org.springframework:spring-webmvc:6.0.0")
+    compileOnly("org.springframework.boot:spring-boot-autoconfigure:3.0.0")
+    compileOnly("org.springframework.boot:spring-boot-configuration-processor:3.0.0")
+    annotationProcessor("org.springframework.boot:spring-boot-configuration-processor:3.0.0")
+    compileOnly("jakarta.servlet:jakarta.servlet-api:6.0.0")
+
+    api("org.slf4j:slf4j-api:2.0.0")
+    api("com.github.malczuuu:problem4j-jackson:3.0.0")
+
+    testRuntimeOnly("jakarta.servlet:jakarta.servlet-api:6.0.0")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.9.2")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.9.2")
+
+    testImplementation("org.springframework.boot:spring-boot-starter-test:3.0.0") {
+        exclude group: "junit", module: "junit"
+    }
+}
+
+tasks.named("test") {
+    useJUnitPlatform()
+}
+
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+        }
+    }
+}
