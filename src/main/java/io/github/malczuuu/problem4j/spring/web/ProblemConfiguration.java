@@ -7,8 +7,8 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@ComponentScan(basePackageClasses = {ProblemAutoConfiguration.class})
-public class ProblemAutoConfiguration {
+@ComponentScan(basePackageClasses = {ProblemConfiguration.class})
+public class ProblemConfiguration {
 
   @ConditionalOnMissingBean
   @Bean

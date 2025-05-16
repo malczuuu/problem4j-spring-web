@@ -291,15 +291,14 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
       return field;
     }
     return switch (jacksonProperties.getPropertyNamingStrategy()) {
-      case "SNAKE_CASE" -> ((SnakeCaseStrategy) PropertyNamingStrategies.SNAKE_CASE)
-          .translate(field);
-      case "UPPER_CAMEL_CASE" -> ((UpperCamelCaseStrategy)
-              PropertyNamingStrategies.UPPER_CAMEL_CASE)
-          .translate(field);
-      case "KEBAB_CASE" -> ((KebabCaseStrategy) PropertyNamingStrategies.KEBAB_CASE)
-          .translate(field);
-      case "LOWER_CASE" -> ((LowerCaseStrategy) PropertyNamingStrategies.LOWER_CASE)
-          .translate(field);
+      case "SNAKE_CASE" ->
+          ((SnakeCaseStrategy) PropertyNamingStrategies.SNAKE_CASE).translate(field);
+      case "UPPER_CAMEL_CASE" ->
+          ((UpperCamelCaseStrategy) PropertyNamingStrategies.UPPER_CAMEL_CASE).translate(field);
+      case "KEBAB_CASE" ->
+          ((KebabCaseStrategy) PropertyNamingStrategies.KEBAB_CASE).translate(field);
+      case "LOWER_CASE" ->
+          ((LowerCaseStrategy) PropertyNamingStrategies.LOWER_CASE).translate(field);
       default -> field;
     };
   }
