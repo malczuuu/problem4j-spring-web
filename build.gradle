@@ -31,7 +31,8 @@ dependencies {
     api("com.github.malczuuu:problem4j-core:3.0.1")
     api("com.github.malczuuu:problem4j-jackson:3.0.0")
 
-    testRuntimeOnly("jakarta.servlet:jakarta.servlet-api:6.0.0")
+    testImplementation("org.springframework:spring-webmvc:6.0.0")
+    testImplementation("jakarta.servlet:jakarta.servlet-api:6.0.0")
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.9.2")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.9.2")
 

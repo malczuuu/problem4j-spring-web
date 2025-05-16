@@ -2,7 +2,6 @@ package io.github.malczuuu.problem4j.spring.web;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-
 import java.io.Serial;
 import java.io.Serializable;
 

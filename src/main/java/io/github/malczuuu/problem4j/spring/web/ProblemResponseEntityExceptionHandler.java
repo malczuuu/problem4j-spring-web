@@ -11,7 +11,7 @@ import io.github.malczuuu.problem4j.core.ProblemException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.stream.Collectors;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.ConversionNotSupportedException;
@@ -20,9 +20,9 @@ import org.springframework.boot.autoconfigure.jackson.JacksonProperties;
 import org.springframework.http.*;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.converter.HttpMessageNotWritableException;
-import org.springframework.util.MimeType;
 import org.springframework.validation.BindException;
 import org.springframework.validation.BindingResult;
+import org.springframework.web.ErrorResponseException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -46,9 +46,12 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
       LoggerFactory.getLogger(ProblemResponseEntityExceptionHandler.class);
 
   private final JacksonProperties jacksonProperties;
+  private final ProblemProperties problemProperties;
 
-  public ProblemResponseEntityExceptionHandler(JacksonProperties jacksonProperties) {
+  public ProblemResponseEntityExceptionHandler(
+      JacksonProperties jacksonProperties, ProblemProperties problemProperties) {
     this.jacksonProperties = jacksonProperties;
+    this.problemProperties = problemProperties;
   }
 
   @ExceptionHandler({ProblemException.class})
@@ -86,12 +89,26 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
         Problem.builder()
             .title(getReasonPhrase(status))
             .status(status.value())
-            .detail("Method " + ex.getMethod() + " not supported");
+            .detail(getMethodNotSupportedDetail(ex));
     if (ex.getSupportedMethods() != null) {
-      builder.extension("supported", Arrays.asList(ex.getSupportedMethods()));
+      builder.extension("supportedMethods", Arrays.asList(ex.getSupportedMethods()));
     }
     Problem problem = builder.build();
     return handleExceptionInternal(ex, problem, headers, status, request);
+  }
+
+  private String getMethodNotSupportedDetail(HttpRequestMethodNotSupportedException ex) {
+    String detailTemplate = "Method {} not supported";
+    detailTemplate = postProcessDetailTemplate(detailTemplate);
+    return detailTemplate.formatted(ex.getMethod());
+  }
+
+  private String postProcessDetailTemplate(String detailTemplate) {
+    return switch (problemProperties.getDefaultDetailFormat()) {
+      case DetailFormat.LOWERCASE -> detailTemplate.toLowerCase();
+      case DetailFormat.UPPERCASE -> detailTemplate.toUpperCase();
+      default -> detailTemplate;
+    };
   }
 
   @Override
@@ -105,10 +122,16 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
         Problem.builder()
             .title(getReasonPhrase(status))
             .status(status.value())
-            .detail("Media type " + ex.getContentType() + " not supported")
-            .extension("supported", new ArrayList<>(ex.getSupportedMediaTypes()))
+            .detail(getMediaTypeNotSupportedDetail(ex))
+            .extension("supportedMediaTypes", new ArrayList<>(ex.getSupportedMediaTypes()))
             .build();
     return handleExceptionInternal(ex, problem, headers, status, request);
+  }
+
+  private String getMediaTypeNotSupportedDetail(HttpMediaTypeNotSupportedException ex) {
+    String detailTemplate = "Media type {} not supported";
+    detailTemplate = postProcessDetailTemplate(detailTemplate);
+    return detailTemplate.formatted(ex.getContentType());
   }
 
   @Override
@@ -122,13 +145,7 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
         Problem.builder()
             .title(getReasonPhrase(status))
             .status(status.value())
-            .detail(
-                "Media type "
-                    + headers.getAccept().stream()
-                        .map(MimeType::toString)
-                        .collect(Collectors.joining(", "))
-                    + " not acceptable")
-            .extension("acceptable", new ArrayList<>(ex.getSupportedMediaTypes()))
+            .extension("supportedMediaTypes", new ArrayList<>(ex.getSupportedMediaTypes()))
             .build();
     return handleExceptionInternal(ex, problem, headers, status, request);
   }
@@ -144,10 +161,16 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
         Problem.builder()
             .title(getReasonPhrase(status))
             .status(status.value())
-            .detail("Missing " + ex.getVariableName() + " path variable")
+            .detail(getMissingPathVariableDetail(ex))
             .extension("name", ex.getVariableName())
             .build();
     return handleExceptionInternal(ex, problem, headers, status, request);
+  }
+
+  private String getMissingPathVariableDetail(MissingPathVariableException ex) {
+    String detailTemplate = "Missing {} path variable";
+    detailTemplate = postProcessDetailTemplate(detailTemplate);
+    return detailTemplate.formatted(ex.getVariableName());
   }
 
   @Override
@@ -161,15 +184,18 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
         Problem.builder()
             .title(getReasonPhrase(status))
             .status(status.value())
-            .detail(
-                "Missing "
-                    + ex.getParameterName()
-                    + " request param of type "
-                    + ex.getParameterType().toLowerCase())
+            .detail(getMissingServletRequestParameterDetail(ex))
             .extension("param", ex.getParameterName())
             .extension("type", ex.getParameterType().toLowerCase())
             .build();
     return handleExceptionInternal(ex, problem, headers, status, request);
+  }
+
+  private String getMissingServletRequestParameterDetail(
+      MissingServletRequestParameterException ex) {
+    String detailTemplate = "Missing {} request param of type {}";
+    detailTemplate = postProcessDetailTemplate(detailTemplate);
+    return detailTemplate.formatted(ex.getParameterName(), ex.getParameterType().toLowerCase());
   }
 
   @Override
@@ -208,12 +234,18 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
         Problem.builder()
             .title(getReasonPhrase(status))
             .status(status.value())
-            .detail("Type mismatch of " + ex.getPropertyName() + " property");
+            .detail(getTypeMismatchDetail(ex));
     if (ex.getRequiredType() != null) {
       problemBuilder =
           problemBuilder.extension("type", ex.getRequiredType().getSimpleName().toLowerCase());
     }
     return handleExceptionInternal(ex, problemBuilder.build(), headers, status, request);
+  }
+
+  private String getTypeMismatchDetail(TypeMismatchException ex) {
+    String detailTemplate = "Type mismatch of {} property";
+    detailTemplate = postProcessDetailTemplate(detailTemplate);
+    return detailTemplate.formatted(ex.getPropertyName());
   }
 
   @Override
@@ -263,10 +295,16 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
         Problem.builder()
             .title(getReasonPhrase(status))
             .status(status.value())
-            .detail("Missing " + ex.getRequestPartName() + " request part")
+            .detail(getMissingServletRequestPartDetail(ex))
             .extension("param", ex.getRequestPartName())
             .build();
     return handleExceptionInternal(ex, problem, headers, status, request);
+  }
+
+  private String getMissingServletRequestPartDetail(MissingServletRequestPartException ex) {
+    String detailTemplate = "Missing {} request part";
+    detailTemplate = postProcessDetailTemplate(detailTemplate);
+    return detailTemplate.formatted(ex.getRequestPartName());
   }
 
   @Override
@@ -283,7 +321,7 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
     bindingResult
         .getFieldErrors()
         .forEach(f -> details.add(new Violation(fieldName(f.getField()), f.getDefaultMessage())));
-    return Problem.builder().detail("Validation failed").extension("errors", details);
+    return Problem.builder().detail(getBindExceptionDetail()).extension("errors", details);
   }
 
   private String fieldName(String field) {
@@ -291,17 +329,22 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
       return field;
     }
     return switch (jacksonProperties.getPropertyNamingStrategy()) {
-      case "SNAKE_CASE" -> ((SnakeCaseStrategy) PropertyNamingStrategies.SNAKE_CASE)
-          .translate(field);
-      case "UPPER_CAMEL_CASE" -> ((UpperCamelCaseStrategy)
-              PropertyNamingStrategies.UPPER_CAMEL_CASE)
-          .translate(field);
-      case "KEBAB_CASE" -> ((KebabCaseStrategy) PropertyNamingStrategies.KEBAB_CASE)
-          .translate(field);
-      case "LOWER_CASE" -> ((LowerCaseStrategy) PropertyNamingStrategies.LOWER_CASE)
-          .translate(field);
+      case "SNAKE_CASE" ->
+          ((SnakeCaseStrategy) PropertyNamingStrategies.SNAKE_CASE).translate(field);
+      case "UPPER_CAMEL_CASE" ->
+          ((UpperCamelCaseStrategy) PropertyNamingStrategies.UPPER_CAMEL_CASE).translate(field);
+      case "KEBAB_CASE" ->
+          ((KebabCaseStrategy) PropertyNamingStrategies.KEBAB_CASE).translate(field);
+      case "LOWER_CASE" ->
+          ((LowerCaseStrategy) PropertyNamingStrategies.LOWER_CASE).translate(field);
       default -> field;
     };
+  }
+
+  private String getBindExceptionDetail() {
+    String detailTemplate = "Validation failed";
+    detailTemplate = postProcessDetailTemplate(detailTemplate);
+    return detailTemplate;
   }
 
   @Override
@@ -326,8 +369,32 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
   }
 
   @Override
+  protected ResponseEntity<Object> handleErrorResponseException(
+      ErrorResponseException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+    ProblemBuilder builder =
+        Problem.builder()
+            .title(getReasonPhrase(status))
+            .status(status.value())
+            .detail(ex.getBody().getDetail())
+            .instance(ex.getBody().getInstance());
+
+    if (ex.getBody().getProperties() != null) {
+      for (Map.Entry<String, Object> entry : ex.getBody().getProperties().entrySet()) {
+        String key = entry.getKey();
+        Object value = entry.getValue();
+        builder = builder.extension(key, value);
+      }
+    }
+
+    Problem problem = builder.build();
+
+    return handleExceptionInternal(ex, problem, headers, status, request);
+  }
+
+  @Override
   protected ResponseEntity<Object> handleExceptionInternal(
       Exception ex, Object body, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+    headers = HttpHeaders.writableHttpHeaders(headers);
     if (body instanceof Problem) {
       headers.setContentType(MediaType.APPLICATION_PROBLEM_JSON);
     }
