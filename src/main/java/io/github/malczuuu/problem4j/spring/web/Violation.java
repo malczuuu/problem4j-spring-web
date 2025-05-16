@@ -2,11 +2,13 @@ package io.github.malczuuu.problem4j.spring.web;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+
+import java.io.Serial;
 import java.io.Serializable;
 
 public class Violation implements Serializable {
 
-  private static final long serialVersionUID = 1L;
+  @Serial private static final long serialVersionUID = 1L;
 
   private final String field;
   private final String error;
