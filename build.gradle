@@ -1,13 +1,19 @@
 plugins {
     id "java-library"
     id "maven-publish"
+    id "com.github.sherter.google-java-format" version "0.9"
 }
 
 group = "com.github.malczuuu"
 version = "3.1.0-SNAPSHOT"
 
-sourceCompatibility = "17"
-targetCompatibility = "17"
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+    withSourcesJar()
+    withJavadocJar()
+}
 
 repositories {
     mavenCentral()
@@ -15,7 +21,6 @@ repositories {
 }
 
 dependencies {
-
     compileOnly("org.springframework:spring-webmvc:6.0.0")
     compileOnly("org.springframework.boot:spring-boot-autoconfigure:3.0.0")
     compileOnly("org.springframework.boot:spring-boot-configuration-processor:3.0.0")
@@ -23,6 +28,7 @@ dependencies {
     compileOnly("jakarta.servlet:jakarta.servlet-api:6.0.0")
 
     api("org.slf4j:slf4j-api:2.0.0")
+    api("com.github.malczuuu:problem4j-core:3.0.1")
     api("com.github.malczuuu:problem4j-jackson:3.0.0")
 
     testRuntimeOnly("jakarta.servlet:jakarta.servlet-api:6.0.0")
@@ -34,19 +40,18 @@ dependencies {
     }
 }
 
-tasks.named("test") {
-    useJUnitPlatform()
-}
-
-java {
-    withSourcesJar()
-    withJavadocJar()
-}
-
 publishing {
     publications {
         maven(MavenPublication) {
             from components.java
         }
     }
+}
+
+googleJavaFormat {
+    toolVersion = "1.26.0"
+}
+
+tasks.named("test") {
+    useJUnitPlatform()
 }
