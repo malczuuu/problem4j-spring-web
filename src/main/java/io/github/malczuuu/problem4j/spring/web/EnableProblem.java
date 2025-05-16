@@ -8,5 +8,5 @@ import org.springframework.context.annotation.Import;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
-@Import(ProblemConfiguration.class)
+@Import(ProblemAutoConfiguration.class)
 public @interface EnableProblem {}
