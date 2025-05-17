@@ -17,11 +17,16 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.ConversionNotSupportedException;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.boot.autoconfigure.jackson.JacksonProperties;
-import org.springframework.http.*;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.converter.HttpMessageNotWritableException;
-import org.springframework.validation.BindException;
 import org.springframework.validation.BindingResult;
+import org.springframework.validation.method.MethodValidationException;
 import org.springframework.web.ErrorResponseException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -35,9 +40,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class ProblemResponseEntityExceptionHandler extends ResponseEntityExceptionHandler {
@@ -199,6 +207,29 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
   }
 
   @Override
+  protected ResponseEntity<Object> handleMissingServletRequestPart(
+      MissingServletRequestPartException ex,
+      HttpHeaders headers,
+      HttpStatusCode status,
+      WebRequest request) {
+    status = HttpStatus.BAD_REQUEST;
+    Problem problem =
+        Problem.builder()
+            .title(getReasonPhrase(status))
+            .status(status.value())
+            .detail(getMissingServletRequestPartDetail(ex))
+            .extension("param", ex.getRequestPartName())
+            .build();
+    return handleExceptionInternal(ex, problem, headers, status, request);
+  }
+
+  private String getMissingServletRequestPartDetail(MissingServletRequestPartException ex) {
+    String detailTemplate = "Missing {} request part";
+    detailTemplate = postProcessDetailTemplate(detailTemplate);
+    return detailTemplate.formatted(ex.getRequestPartName());
+  }
+
+  @Override
   protected ResponseEntity<Object> handleServletRequestBindingException(
       ServletRequestBindingException ex,
       HttpHeaders headers,
@@ -212,6 +243,135 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
             .detail(ex.getMessage())
             .build();
     return handleExceptionInternal(ex, problem, headers, status, request);
+  }
+
+  @Override
+  protected ResponseEntity<Object> handleMethodArgumentNotValid(
+      MethodArgumentNotValidException ex,
+      HttpHeaders headers,
+      HttpStatusCode status,
+      WebRequest request) {
+    status = HttpStatus.BAD_REQUEST;
+    Problem problem =
+        from(ex.getBindingResult()).title(getReasonPhrase(status)).status(status.value()).build();
+    return handleExceptionInternal(ex, problem, headers, status, request);
+  }
+
+  private ProblemBuilder from(BindingResult bindingResult) {
+    ArrayList<Violation> details = new ArrayList<>();
+    bindingResult
+        .getFieldErrors()
+        .forEach(f -> details.add(new Violation(fieldName(f.getField()), f.getDefaultMessage())));
+    return Problem.builder().detail(getBindExceptionDetail()).extension("errors", details);
+  }
+
+  private String fieldName(String field) {
+    if (jacksonProperties.getPropertyNamingStrategy() == null) {
+      return field;
+    }
+    return switch (jacksonProperties.getPropertyNamingStrategy()) {
+      case "SNAKE_CASE" ->
+          ((SnakeCaseStrategy) PropertyNamingStrategies.SNAKE_CASE).translate(field);
+      case "UPPER_CAMEL_CASE" ->
+          ((UpperCamelCaseStrategy) PropertyNamingStrategies.UPPER_CAMEL_CASE).translate(field);
+      case "KEBAB_CASE" ->
+          ((KebabCaseStrategy) PropertyNamingStrategies.KEBAB_CASE).translate(field);
+      case "LOWER_CASE" ->
+          ((LowerCaseStrategy) PropertyNamingStrategies.LOWER_CASE).translate(field);
+      default -> field;
+    };
+  }
+
+  private String getBindExceptionDetail() {
+    String detailTemplate = "Validation failed";
+    detailTemplate = postProcessDetailTemplate(detailTemplate);
+    return detailTemplate;
+  }
+
+  @Override
+  protected ResponseEntity<Object> handleHandlerMethodValidationException(
+      HandlerMethodValidationException ex,
+      HttpHeaders headers,
+      HttpStatusCode status,
+      WebRequest request) {
+
+    return handleExceptionInternal(ex, null, headers, status, request);
+  }
+
+  @Override
+  protected ResponseEntity<Object> handleNoHandlerFoundException(
+      NoHandlerFoundException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+    status = HttpStatus.NOT_FOUND;
+    Problem problem =
+        Problem.builder().title(getReasonPhrase(status)).status(status.value()).build();
+    return handleExceptionInternal(ex, problem, headers, status, request);
+  }
+
+  @Override
+  protected ResponseEntity<Object> handleNoResourceFoundException(
+      NoResourceFoundException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+    status = HttpStatus.NOT_FOUND;
+    Problem problem =
+        Problem.builder().title(getReasonPhrase(status)).status(status.value()).build();
+    return handleExceptionInternal(ex, problem, headers, status, request);
+  }
+
+  @Override
+  protected ResponseEntity<Object> handleAsyncRequestTimeoutException(
+      AsyncRequestTimeoutException ex,
+      HttpHeaders headers,
+      HttpStatusCode status,
+      WebRequest request) {
+    status = HttpStatus.INTERNAL_SERVER_ERROR;
+    Problem problem =
+        Problem.builder().title(getReasonPhrase(status)).status(status.value()).build();
+    return handleExceptionInternal(ex, problem, headers, status, request);
+  }
+
+  @Override
+  protected ResponseEntity<Object> handleErrorResponseException(
+      ErrorResponseException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+    ProblemBuilder builder =
+        Problem.builder()
+            .title(getReasonPhrase(status))
+            .status(status.value())
+            .detail(ex.getBody().getDetail())
+            .instance(ex.getBody().getInstance());
+
+    if (ex.getBody().getProperties() != null) {
+      for (Map.Entry<String, Object> entry : ex.getBody().getProperties().entrySet()) {
+        String key = entry.getKey();
+        Object value = entry.getValue();
+        builder = builder.extension(key, value);
+      }
+    }
+
+    Problem problem = builder.build();
+
+    return handleExceptionInternal(ex, problem, headers, status, request);
+  }
+
+  @Override
+  protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
+      MaxUploadSizeExceededException ex,
+      HttpHeaders headers,
+      HttpStatusCode status,
+      WebRequest request) {
+    status = HttpStatus.PAYLOAD_TOO_LARGE;
+    Problem problem =
+        Problem.builder()
+            .title(getReasonPhrase(status))
+            .status(status.value())
+            .detail(getMaxUploadSizeExceededDetail())
+            .extension("maxUploadSize", ex.getMaxUploadSize())
+            .build();
+    return handleExceptionInternal(ex, problem, headers, status, request);
+  }
+
+  private String getMaxUploadSizeExceededDetail() {
+    String detailTemplate = "Max upload size exceeded";
+    detailTemplate = postProcessDetailTemplate(detailTemplate);
+    return detailTemplate;
   }
 
   @Override
@@ -273,128 +433,16 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
   }
 
   @Override
-  protected ResponseEntity<Object> handleMethodArgumentNotValid(
-      MethodArgumentNotValidException ex,
-      HttpHeaders headers,
-      HttpStatusCode status,
-      WebRequest request) {
-    status = HttpStatus.BAD_REQUEST;
-    Problem problem =
-        from(ex.getBindingResult()).title(getReasonPhrase(status)).status(status.value()).build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
-  }
-
-  @Override
-  protected ResponseEntity<Object> handleMissingServletRequestPart(
-      MissingServletRequestPartException ex,
-      HttpHeaders headers,
-      HttpStatusCode status,
-      WebRequest request) {
-    status = HttpStatus.BAD_REQUEST;
-    Problem problem =
-        Problem.builder()
-            .title(getReasonPhrase(status))
-            .status(status.value())
-            .detail(getMissingServletRequestPartDetail(ex))
-            .extension("param", ex.getRequestPartName())
-            .build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
-  }
-
-  private String getMissingServletRequestPartDetail(MissingServletRequestPartException ex) {
-    String detailTemplate = "Missing {} request part";
-    detailTemplate = postProcessDetailTemplate(detailTemplate);
-    return detailTemplate.formatted(ex.getRequestPartName());
-  }
-
-  @Override
-  protected ResponseEntity<Object> handleBindException(
-      BindException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-    status = HttpStatus.BAD_REQUEST;
-    Problem problem =
-        from(ex.getBindingResult()).title(getReasonPhrase(status)).status(status.value()).build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
-  }
-
-  private ProblemBuilder from(BindingResult bindingResult) {
-    ArrayList<Violation> details = new ArrayList<>();
-    bindingResult
-        .getFieldErrors()
-        .forEach(f -> details.add(new Violation(fieldName(f.getField()), f.getDefaultMessage())));
-    return Problem.builder().detail(getBindExceptionDetail()).extension("errors", details);
-  }
-
-  private String fieldName(String field) {
-    if (jacksonProperties.getPropertyNamingStrategy() == null) {
-      return field;
-    }
-    return switch (jacksonProperties.getPropertyNamingStrategy()) {
-      case "SNAKE_CASE" ->
-          ((SnakeCaseStrategy) PropertyNamingStrategies.SNAKE_CASE).translate(field);
-      case "UPPER_CAMEL_CASE" ->
-          ((UpperCamelCaseStrategy) PropertyNamingStrategies.UPPER_CAMEL_CASE).translate(field);
-      case "KEBAB_CASE" ->
-          ((KebabCaseStrategy) PropertyNamingStrategies.KEBAB_CASE).translate(field);
-      case "LOWER_CASE" ->
-          ((LowerCaseStrategy) PropertyNamingStrategies.LOWER_CASE).translate(field);
-      default -> field;
-    };
-  }
-
-  private String getBindExceptionDetail() {
-    String detailTemplate = "Validation failed";
-    detailTemplate = postProcessDetailTemplate(detailTemplate);
-    return detailTemplate;
-  }
-
-  @Override
-  protected ResponseEntity<Object> handleNoHandlerFoundException(
-      NoHandlerFoundException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-    status = HttpStatus.NOT_FOUND;
-    Problem problem =
-        Problem.builder().title(getReasonPhrase(status)).status(status.value()).build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
-  }
-
-  @Override
-  protected ResponseEntity<Object> handleAsyncRequestTimeoutException(
-      AsyncRequestTimeoutException ex,
-      HttpHeaders headers,
-      HttpStatusCode status,
-      WebRequest request) {
-    status = HttpStatus.INTERNAL_SERVER_ERROR;
-    Problem problem =
-        Problem.builder().title(getReasonPhrase(status)).status(status.value()).build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
-  }
-
-  @Override
-  protected ResponseEntity<Object> handleErrorResponseException(
-      ErrorResponseException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-    ProblemBuilder builder =
-        Problem.builder()
-            .title(getReasonPhrase(status))
-            .status(status.value())
-            .detail(ex.getBody().getDetail())
-            .instance(ex.getBody().getInstance());
-
-    if (ex.getBody().getProperties() != null) {
-      for (Map.Entry<String, Object> entry : ex.getBody().getProperties().entrySet()) {
-        String key = entry.getKey();
-        Object value = entry.getValue();
-        builder = builder.extension(key, value);
-      }
-    }
-
-    Problem problem = builder.build();
-
-    return handleExceptionInternal(ex, problem, headers, status, request);
+  protected ResponseEntity<Object> handleMethodValidationException(
+      MethodValidationException ex, HttpHeaders headers, HttpStatus status, WebRequest request) {
+    ProblemDetail body = createProblemDetail(ex, status, "Validation failed", null, null, request);
+    return handleExceptionInternal(ex, body, headers, status, request);
   }
 
   @Override
   protected ResponseEntity<Object> handleExceptionInternal(
       Exception ex, Object body, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-    headers = HttpHeaders.writableHttpHeaders(headers);
+    headers = new HttpHeaders(headers);
     if (body instanceof Problem) {
       headers.setContentType(MediaType.APPLICATION_PROBLEM_JSON);
     }
