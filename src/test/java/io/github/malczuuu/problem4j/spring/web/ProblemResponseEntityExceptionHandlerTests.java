@@ -12,15 +12,22 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.beans.ConversionNotSupportedException;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.boot.autoconfigure.jackson.JacksonProperties;
 import org.springframework.core.MethodParameter;
-import org.springframework.http.*;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.converter.HttpMessageNotWritableException;
 import org.springframework.mock.http.MockHttpInputMessage;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.validation.*;
+import org.springframework.validation.BeanPropertyBindingResult;
+import org.springframework.validation.method.MethodValidationException;
+import org.springframework.validation.method.MethodValidationResult;
 import org.springframework.web.ErrorResponseException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -30,8 +37,11 @@ import org.springframework.web.bind.MissingPathVariableException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 class ProblemResponseEntityExceptionHandlerTests {
 
@@ -48,7 +58,9 @@ class ProblemResponseEntityExceptionHandlerTests {
   @BeforeEach
   void beforeEach() {
     problemProperties = mock(ProblemProperties.class);
-    handler = new ProblemResponseEntityExceptionHandler(new JacksonProperties(), problemProperties);
+    handler =
+        new ProblemResponseEntityExceptionHandler(
+            new JacksonProperties(), problemProperties, List.of());
   }
 
   @ParameterizedTest
@@ -181,6 +193,177 @@ class ProblemResponseEntityExceptionHandlerTests {
 
   @ParameterizedTest
   @CsvSource({
+    DetailFormat.LOWERCASE + ",missing {} request part",
+    DetailFormat.UPPERCASE + ",MISSING {} REQUEST PART",
+    DetailFormat.CAPITALIZED + ",Missing {} request part"
+  })
+  void givenMissingServletRequestPartExceptionShouldGenerateProblem(
+      String defaultDetailFormat, String detailTemplate) {
+    when(problemProperties.getDefaultDetailFormat()).thenReturn(defaultDetailFormat);
+
+    MissingServletRequestPartException ex =
+        new MissingServletRequestPartException("requestPartName");
+
+    ResponseEntity<Object> response =
+        handler.handleMissingServletRequestPart(
+            ex, ex.getHeaders(), ex.getStatusCode(), mockWebRequest);
+
+    assertInstanceOf(Problem.class, response.getBody());
+    Problem problem = (Problem) response.getBody();
+    assertEquals(Problem.BLANK_TYPE, problem.getType());
+    assertEquals(HttpStatus.BAD_REQUEST.getReasonPhrase(), problem.getTitle());
+    assertEquals(HttpStatus.BAD_REQUEST.value(), problem.getStatus());
+    assertEquals(detailTemplate.formatted(ex.getRequestPartName()), problem.getDetail());
+    assertEquals(ex.getRequestPartName(), problem.getExtensionValue("param"));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    DetailFormat.LOWERCASE + ",validation failed",
+    DetailFormat.UPPERCASE + ",VALIDATION FAILED",
+    DetailFormat.CAPITALIZED + ",Validation failed"
+  })
+  void givenMethodArgumentNotValidExceptionShouldGenerateProblem(
+      String defaultDetailFormat, String detailTemplate) {
+    when(problemProperties.getDefaultDetailFormat()).thenReturn(defaultDetailFormat);
+
+    MethodArgumentNotValidException ex =
+        new MethodArgumentNotValidException(
+            mockMethodParameter, new BeanPropertyBindingResult("target", "objectName"));
+
+    ResponseEntity<Object> response =
+        handler.handleMethodArgumentNotValid(
+            ex, ex.getHeaders(), ex.getStatusCode(), mockWebRequest);
+
+    assertInstanceOf(Problem.class, response.getBody());
+    Problem problem = (Problem) response.getBody();
+    assertEquals(Problem.BLANK_TYPE, problem.getType());
+    assertEquals(HttpStatus.BAD_REQUEST.getReasonPhrase(), problem.getTitle());
+    assertEquals(HttpStatus.BAD_REQUEST.value(), problem.getStatus());
+    assertEquals(detailTemplate, problem.getDetail());
+  }
+
+  @Test
+  void givenHandlerMethodValidationExceptionShouldGenerateProblem() {
+    MethodValidationResult mockMethodValidationResult = mock(MethodValidationResult.class);
+    HandlerMethodValidationException ex =
+        new HandlerMethodValidationException(mockMethodValidationResult);
+
+    ResponseEntity<Object> response =
+        handler.handleHandlerMethodValidationException(
+            ex, new HttpHeaders(), HttpStatus.BAD_REQUEST, mockWebRequest);
+
+    assertInstanceOf(Problem.class, response.getBody());
+    Problem problem = (Problem) response.getBody();
+    assertEquals(Problem.BLANK_TYPE, problem.getType());
+    assertEquals(HttpStatus.BAD_REQUEST.getReasonPhrase(), problem.getTitle());
+    assertEquals(HttpStatus.BAD_REQUEST.value(), problem.getStatus());
+  }
+
+  @Test
+  void givenNoHandlerFoundExceptionShouldGenerateProblem() {
+    NoHandlerFoundException ex =
+        new NoHandlerFoundException(HttpMethod.GET.name(), "/api/resources", new HttpHeaders());
+
+    ResponseEntity<Object> response =
+        handler.handleNoHandlerFoundException(
+            ex, ex.getHeaders(), ex.getStatusCode(), mockWebRequest);
+
+    assertInstanceOf(Problem.class, response.getBody());
+    Problem problem = (Problem) response.getBody();
+    assertEquals(Problem.BLANK_TYPE, problem.getType());
+    assertEquals(HttpStatus.NOT_FOUND.getReasonPhrase(), problem.getTitle());
+    assertEquals(HttpStatus.NOT_FOUND.value(), problem.getStatus());
+  }
+
+  @Test
+  void givenNoResourceFoundExceptionShouldGenerateProblem() {
+    NoResourceFoundException ex = new NoResourceFoundException(HttpMethod.GET, "/api/resource");
+
+    ResponseEntity<Object> response =
+        handler.handleNoResourceFoundException(
+            ex, ex.getHeaders(), ex.getStatusCode(), mockWebRequest);
+
+    assertInstanceOf(Problem.class, response.getBody());
+    Problem problem = (Problem) response.getBody();
+    assertEquals(Problem.BLANK_TYPE, problem.getType());
+    assertEquals(HttpStatus.NOT_FOUND.getReasonPhrase(), problem.getTitle());
+    assertEquals(HttpStatus.NOT_FOUND.value(), problem.getStatus());
+  }
+
+  @Test
+  void givenAsyncRequestTimeoutExceptionShouldGenerateProblem() {
+    AsyncRequestTimeoutException ex = new AsyncRequestTimeoutException();
+
+    ResponseEntity<Object> response =
+        handler.handleAsyncRequestTimeoutException(
+            ex, ex.getHeaders(), ex.getStatusCode(), mockWebRequest);
+
+    assertInstanceOf(Problem.class, response.getBody());
+    Problem problem = (Problem) response.getBody();
+    assertEquals(Problem.BLANK_TYPE, problem.getType());
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase(), problem.getTitle());
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR.value(), problem.getStatus());
+  }
+
+  @Test
+  void givenErrorResponseExceptionShouldGenerateProblem() {
+    ErrorResponseException ex = new ErrorResponseException(HttpStatus.UNAUTHORIZED);
+
+    ResponseEntity<Object> response =
+        handler.handleErrorResponseException(
+            ex, ex.getHeaders(), ex.getStatusCode(), mockWebRequest);
+
+    assertInstanceOf(Problem.class, response.getBody());
+    Problem problem = (Problem) response.getBody();
+    assertEquals(Problem.BLANK_TYPE, problem.getType());
+    assertEquals(HttpStatus.UNAUTHORIZED.getReasonPhrase(), problem.getTitle());
+    assertEquals(HttpStatus.UNAUTHORIZED.value(), problem.getStatus());
+  }
+
+  // Max upload size exceeded
+  @ParameterizedTest
+  @CsvSource({
+    DetailFormat.LOWERCASE + ",max upload size exceeded",
+    DetailFormat.UPPERCASE + ",MAX UPLOAD SIZE EXCEEDED",
+    DetailFormat.CAPITALIZED + ",Max upload size exceeded"
+  })
+  void givenMaxUploadSizeExceededExceptionShouldGenerateProblem(
+      String defaultDetailFormat, String detailTemplate) {
+    when(problemProperties.getDefaultDetailFormat()).thenReturn(defaultDetailFormat);
+
+    MaxUploadSizeExceededException ex = new MaxUploadSizeExceededException(1024);
+
+    ResponseEntity<Object> response =
+        handler.handleMaxUploadSizeExceededException(
+            ex, ex.getHeaders(), ex.getStatusCode(), mockWebRequest);
+
+    assertInstanceOf(Problem.class, response.getBody());
+    Problem problem = (Problem) response.getBody();
+    assertEquals(Problem.BLANK_TYPE, problem.getType());
+    assertEquals(HttpStatus.PAYLOAD_TOO_LARGE.getReasonPhrase(), problem.getTitle());
+    assertEquals(HttpStatus.PAYLOAD_TOO_LARGE.value(), problem.getStatus());
+    assertEquals(detailTemplate, problem.getDetail());
+    assertEquals(ex.getMaxUploadSize(), problem.getExtensionValue("maxUploadSize"));
+  }
+
+  @Test
+  void givenConversionNotSupportedExceptionShouldGenerateProblem() {
+    ConversionNotSupportedException ex = mock(ConversionNotSupportedException.class);
+
+    ResponseEntity<Object> response =
+        handler.handleConversionNotSupported(
+            ex, new HttpHeaders(), HttpStatus.INTERNAL_SERVER_ERROR, mockWebRequest);
+
+    assertInstanceOf(Problem.class, response.getBody());
+    Problem problem = (Problem) response.getBody();
+    assertEquals(Problem.BLANK_TYPE, problem.getType());
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase(), problem.getTitle());
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR.value(), problem.getStatus());
+  }
+
+  @ParameterizedTest
+  @CsvSource({
     DetailFormat.LOWERCASE + ",type mismatch of {} property",
     DetailFormat.UPPERCASE + ",TYPE MISMATCH OF {} PROPERTY",
     DetailFormat.CAPITALIZED + ",Type mismatch of {} property"
@@ -236,124 +419,20 @@ class ProblemResponseEntityExceptionHandlerTests {
     assertEquals(HttpStatus.INTERNAL_SERVER_ERROR.value(), problem.getStatus());
   }
 
-  @ParameterizedTest
-  @CsvSource({
-    DetailFormat.LOWERCASE + ",validation failed",
-    DetailFormat.UPPERCASE + ",VALIDATION FAILED",
-    DetailFormat.CAPITALIZED + ",Validation failed"
-  })
-  void givenMethodArgumentNotValidExceptionShouldGenerateProblem(
-      String defaultDetailFormat, String detailTemplate) {
-    when(problemProperties.getDefaultDetailFormat()).thenReturn(defaultDetailFormat);
-
-    MethodArgumentNotValidException ex =
-        new MethodArgumentNotValidException(
-            mockMethodParameter, new BeanPropertyBindingResult("target", "objectName"));
+  @Test
+  void givenMethodValidationExceptionShouldGenerateProblem() {
+    MethodValidationResult mockMethodValidationResult = mock(MethodValidationResult.class);
+    MethodValidationException ex = new MethodValidationException(mockMethodValidationResult);
 
     ResponseEntity<Object> response =
-        handler.handleMethodArgumentNotValid(
-            ex, ex.getHeaders(), ex.getStatusCode(), mockWebRequest);
+        handler.handleMethodValidationException(
+            ex, new HttpHeaders(), HttpStatus.BAD_REQUEST, mockWebRequest);
 
     assertInstanceOf(Problem.class, response.getBody());
     Problem problem = (Problem) response.getBody();
     assertEquals(Problem.BLANK_TYPE, problem.getType());
     assertEquals(HttpStatus.BAD_REQUEST.getReasonPhrase(), problem.getTitle());
     assertEquals(HttpStatus.BAD_REQUEST.value(), problem.getStatus());
-    assertEquals(detailTemplate, problem.getDetail());
-  }
-
-  @ParameterizedTest
-  @CsvSource({
-    DetailFormat.LOWERCASE + ",missing {} request part",
-    DetailFormat.UPPERCASE + ",MISSING {} REQUEST PART",
-    DetailFormat.CAPITALIZED + ",Missing {} request part"
-  })
-  void givenMissingServletRequestPartExceptionShouldGenerateProblem(
-      String defaultDetailFormat, String detailTemplate) {
-    when(problemProperties.getDefaultDetailFormat()).thenReturn(defaultDetailFormat);
-
-    MissingServletRequestPartException ex =
-        new MissingServletRequestPartException("requestPartName");
-
-    ResponseEntity<Object> response =
-        handler.handleMissingServletRequestPart(
-            ex, ex.getHeaders(), ex.getStatusCode(), mockWebRequest);
-
-    assertInstanceOf(Problem.class, response.getBody());
-    Problem problem = (Problem) response.getBody();
-    assertEquals(Problem.BLANK_TYPE, problem.getType());
-    assertEquals(HttpStatus.BAD_REQUEST.getReasonPhrase(), problem.getTitle());
-    assertEquals(HttpStatus.BAD_REQUEST.value(), problem.getStatus());
-    assertEquals(detailTemplate.formatted(ex.getRequestPartName()), problem.getDetail());
-    assertEquals(ex.getRequestPartName(), problem.getExtensionValue("param"));
-  }
-
-  @ParameterizedTest
-  @CsvSource({
-    DetailFormat.LOWERCASE + ",validation failed",
-    DetailFormat.UPPERCASE + ",VALIDATION FAILED",
-    DetailFormat.CAPITALIZED + ",Validation failed"
-  })
-  void givenBindExceptionShouldGenerateProblem(String defaultDetailFormat, String detailTemplate) {
-    when(problemProperties.getDefaultDetailFormat()).thenReturn(defaultDetailFormat);
-
-    BindException ex = new BindException("target", "objectName");
-
-    ResponseEntity<Object> response =
-        handler.handleBindException(ex, new HttpHeaders(), HttpStatus.BAD_REQUEST, mockWebRequest);
-
-    assertInstanceOf(Problem.class, response.getBody());
-    Problem problem = (Problem) response.getBody();
-    assertEquals(Problem.BLANK_TYPE, problem.getType());
-    assertEquals(HttpStatus.BAD_REQUEST.getReasonPhrase(), problem.getTitle());
-    assertEquals(HttpStatus.BAD_REQUEST.value(), problem.getStatus());
-    assertEquals(detailTemplate, problem.getDetail());
-  }
-
-  @Test
-  void givenNoHandlerFoundExceptionShouldGenerateProblem() {
-    NoHandlerFoundException ex =
-        new NoHandlerFoundException(HttpMethod.GET.name(), "/api/resources", new HttpHeaders());
-
-    ResponseEntity<Object> response =
-        handler.handleNoHandlerFoundException(
-            ex, ex.getHeaders(), ex.getStatusCode(), mockWebRequest);
-
-    assertInstanceOf(Problem.class, response.getBody());
-    Problem problem = (Problem) response.getBody();
-    assertEquals(Problem.BLANK_TYPE, problem.getType());
-    assertEquals(HttpStatus.NOT_FOUND.getReasonPhrase(), problem.getTitle());
-    assertEquals(HttpStatus.NOT_FOUND.value(), problem.getStatus());
-  }
-
-  @Test
-  void givenAsyncRequestTimeoutExceptionShouldGenerateProblem() {
-    AsyncRequestTimeoutException ex = new AsyncRequestTimeoutException();
-
-    ResponseEntity<Object> response =
-        handler.handleAsyncRequestTimeoutException(
-            ex, ex.getHeaders(), ex.getStatusCode(), mockWebRequest);
-
-    assertInstanceOf(Problem.class, response.getBody());
-    Problem problem = (Problem) response.getBody();
-    assertEquals(Problem.BLANK_TYPE, problem.getType());
-    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase(), problem.getTitle());
-    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR.value(), problem.getStatus());
-  }
-
-  @Test
-  void givenErrorResponseExceptionShouldGenerateProblem() {
-    ErrorResponseException ex = new ErrorResponseException(HttpStatus.UNAUTHORIZED);
-
-    ResponseEntity<Object> response =
-        handler.handleErrorResponseException(
-            ex, ex.getHeaders(), ex.getStatusCode(), mockWebRequest);
-
-    assertInstanceOf(Problem.class, response.getBody());
-    Problem problem = (Problem) response.getBody();
-    assertEquals(Problem.BLANK_TYPE, problem.getType());
-    assertEquals(HttpStatus.UNAUTHORIZED.getReasonPhrase(), problem.getTitle());
-    assertEquals(HttpStatus.UNAUTHORIZED.value(), problem.getStatus());
   }
 
   private static class DummyController {
