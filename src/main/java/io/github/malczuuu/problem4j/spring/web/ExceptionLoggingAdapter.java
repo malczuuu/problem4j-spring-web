@@ -4,16 +4,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 
-@ConditionalOnProperty(
-    name = "problem4j.logging-enabled",
-    havingValue = "true",
-    matchIfMissing = true)
-@Component
 public class ExceptionLoggingAdapter implements ExceptionAdapter, InitializingBean {
 
   private static final Logger log = LoggerFactory.getLogger(ExceptionLoggingAdapter.class);
