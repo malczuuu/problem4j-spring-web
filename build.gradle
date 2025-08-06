@@ -49,6 +49,8 @@ publishing {
     }
 }
 
+import com.diffplug.spotless.LineEnding
+
 spotless {
     format "misc", {
         target "*.gradle", ".gitattributes", ".gitignore"
@@ -70,6 +72,7 @@ spotless {
         target "src/**/*.java"
 
         googleJavaFormat("1.28.0")
+        lineEndings = LineEnding.UNIX
     }
 }
 
