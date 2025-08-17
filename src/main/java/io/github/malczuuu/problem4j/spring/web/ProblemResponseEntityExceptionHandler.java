@@ -101,7 +101,7 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
     return handleExceptionInternal(ex, problem, new HttpHeaders(), status, request);
   }
 
-  protected String getReasonPhrase(HttpStatusCode statusCode) {
+  private String getReasonPhrase(HttpStatusCode statusCode) {
     HttpStatus status = HttpStatus.resolve(statusCode.value());
     if (status != null) {
       return status.getReasonPhrase();
