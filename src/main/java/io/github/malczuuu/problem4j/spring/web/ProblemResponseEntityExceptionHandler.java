@@ -260,6 +260,9 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
     bindingResult
         .getFieldErrors()
         .forEach(f -> details.add(new Violation(fieldName(f.getField()), f.getDefaultMessage())));
+    bindingResult
+        .getGlobalErrors()
+        .forEach(g -> details.add(new Violation(null, g.getDefaultMessage())));
     return Problem.builder().detail(getBindExceptionDetail()).extension("errors", details);
   }
 
