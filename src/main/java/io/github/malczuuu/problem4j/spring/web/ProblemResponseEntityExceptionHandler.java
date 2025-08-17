@@ -8,6 +8,9 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies.UpperCamelCaseStr
 import io.github.malczuuu.problem4j.core.Problem;
 import io.github.malczuuu.problem4j.core.ProblemBuilder;
 import io.github.malczuuu.problem4j.core.ProblemException;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -68,20 +71,55 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
     return handleExceptionInternal(ex, problem, headers, status, request);
   }
 
+  @ExceptionHandler(ConstraintViolationException.class)
+  public ResponseEntity<Object> handleConstraintViolationException(
+      ConstraintViolationException ex, WebRequest request) {
+    HttpStatus status = HttpStatus.BAD_REQUEST;
+    List<Violation> errors =
+        ex.getConstraintViolations().stream()
+            .map(violation -> new Violation(getPropertyName(violation), violation.getMessage()))
+            .toList();
+
+    Problem problem =
+        Problem.builder()
+            .title(status.getReasonPhrase())
+            .status(status.value())
+            .extension("errors", errors)
+            .build();
+    return handleExceptionInternal(ex, problem, new HttpHeaders(), status, request);
+  }
+
   @ExceptionHandler({Exception.class})
   public ResponseEntity<Object> handleOtherException(Exception ex, WebRequest request) {
     HttpStatusCode status = HttpStatus.INTERNAL_SERVER_ERROR;
     Problem problem =
-        Problem.builder().title(getReasonPhrase(status)).status(status.value()).build();
+        Problem.builder()
+            .title(getReasonPhrase(status))
+            .status(status.value())
+            .detail(getValidationFailedDetail())
+            .build();
     return handleExceptionInternal(ex, problem, new HttpHeaders(), status, request);
   }
 
-  private String getReasonPhrase(HttpStatusCode statusCode) {
+  protected String getReasonPhrase(HttpStatusCode statusCode) {
     HttpStatus status = HttpStatus.resolve(statusCode.value());
     if (status != null) {
       return status.getReasonPhrase();
     }
     return "";
+  }
+
+  private String getPropertyName(ConstraintViolation<?> violation) {
+    if (violation.getPropertyPath() == null) {
+      return "";
+    }
+
+    String lastElement = null;
+    for (Path.Node node : violation.getPropertyPath()) {
+      lastElement = node.getName();
+    }
+
+    return lastElement != null ? lastElement : "";
   }
 
   @Override
@@ -263,7 +301,7 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
     bindingResult
         .getGlobalErrors()
         .forEach(g -> details.add(new Violation(null, g.getDefaultMessage())));
-    return Problem.builder().detail(getBindExceptionDetail()).extension("errors", details);
+    return Problem.builder().detail(getValidationFailedDetail()).extension("errors", details);
   }
 
   private String fieldName(String field) {
@@ -283,7 +321,7 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
     };
   }
 
-  private String getBindExceptionDetail() {
+  private String getValidationFailedDetail() {
     String detailTemplate = "Validation failed";
     detailTemplate = postProcessDetailTemplate(detailTemplate);
     return detailTemplate;
