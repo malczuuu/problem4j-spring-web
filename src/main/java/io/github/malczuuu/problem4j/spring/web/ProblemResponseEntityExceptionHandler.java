@@ -77,7 +77,10 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
     HttpStatus status = HttpStatus.BAD_REQUEST;
     List<Violation> errors =
         ex.getConstraintViolations().stream()
-            .map(violation -> new Violation(getPropertyName(violation), violation.getMessage()))
+            .map(
+                violation ->
+                    new Violation(
+                        fieldName(fetchViolationProperty(violation)), violation.getMessage()))
             .toList();
 
     Problem problem =
@@ -109,7 +112,7 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
     return "";
   }
 
-  private String getPropertyName(ConstraintViolation<?> violation) {
+  private String fetchViolationProperty(ConstraintViolation<?> violation) {
     if (violation.getPropertyPath() == null) {
       return "";
     }
