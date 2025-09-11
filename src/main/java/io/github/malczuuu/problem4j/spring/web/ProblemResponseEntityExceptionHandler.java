@@ -96,10 +96,7 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
   public ResponseEntity<Object> handleOtherException(Exception ex, WebRequest request) {
     HttpStatusCode status = HttpStatus.INTERNAL_SERVER_ERROR;
     Problem problem =
-        Problem.builder()
-            .title(getReasonPhrase(status))
-            .status(status.value())
-            .build();
+        Problem.builder().title(getReasonPhrase(status)).status(status.value()).build();
     return handleExceptionInternal(ex, problem, new HttpHeaders(), status, request);
   }
 
