@@ -99,7 +99,6 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
         Problem.builder()
             .title(getReasonPhrase(status))
             .status(status.value())
-            .detail(getValidationFailedDetail())
             .build();
     return handleExceptionInternal(ex, problem, new HttpHeaders(), status, request);
   }
