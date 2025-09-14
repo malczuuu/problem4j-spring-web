@@ -56,6 +56,7 @@ class Versioning {
                         RevTag revTag = revWalk.parseTag(ref.objectId)
                         commitId = revTag.getObject().getId()
                     } catch (IncorrectObjectTypeException ignored) {
+                        // Not a tag object, likely a lightweight tag
                         commitId = ref.getObjectId()
                     }
                     commitId == headCommit.id
@@ -77,7 +78,7 @@ class Versioning {
                 // Walk history from HEAD backwards
                 revWalk.markStart(headCommit)
                 for (RevCommit c : revWalk) {
-                    def tagRef = tagToCommit.find { it.value == c }?.key
+                    def tagRef = tagToCommit.find { it.getValue() == c }?.getKey()
                     if (tagRef != null) {
                         def tagName = tagRef.getName().replaceAll('refs/tags/', '')
                         def abbrevHash = headCommit.getId().name().substring(0, 7)
