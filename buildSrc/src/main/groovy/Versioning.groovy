@@ -49,30 +49,30 @@ class Versioning {
             }
 
             // Check if HEAD is exactly on a tag
-            Ref tagOnHead = tags.find { ref ->
+            Ref tagOnHead = tags.find {
                 try (RevWalk revWalk = new RevWalk(repository)) {
                     ObjectId commitId
                     try {
-                        RevTag revTag = revWalk.parseTag(ref.objectId)
+                        RevTag revTag = revWalk.parseTag(it.objectId)
                         commitId = revTag.getObject().getId()
                     } catch (IncorrectObjectTypeException ignored) {
                         // Not a tag object, likely a lightweight tag
-                        commitId = ref.getObjectId()
+                        commitId = it.getObjectId()
                     }
-                    commitId == headCommit.id
+                    return commitId == headCommit.id
                 }
             }
             if (tagOnHead != null) {
-                return tagOnHead.getName().replaceAll('refs/tags/', '')
+                return tagOnHead.getName().replaceAll("refs/tags/", "")
             }
 
             // Map each tag to the commit it points to
             Map<Ref, RevCommit> tagToCommit = [:]
             try (RevWalk revWalk = new RevWalk(repository)) {
-                tags.each { Ref ref ->
-                    def commitId = ref.getPeeledObjectId() ?: ref.getObjectId()
+                tags.each {
+                    def commitId = it.getPeeledObjectId() ?: it.getObjectId()
                     RevCommit commit = revWalk.parseCommit(commitId)
-                    tagToCommit[ref] = commit
+                    tagToCommit[it] = commit
                 }
 
                 // Walk history from HEAD backwards
@@ -80,7 +80,7 @@ class Versioning {
                 for (RevCommit c : revWalk) {
                     def tagRef = tagToCommit.find { it.getValue() == c }?.getKey()
                     if (tagRef != null) {
-                        def tagName = tagRef.getName().replaceAll('refs/tags/', '')
+                        def tagName = tagRef.getName().replaceAll("refs/tags/", "")
                         def abbrevHash = headCommit.getId().name().substring(0, 7)
                         return "${tagName}-${abbrevHash}"
                     }
@@ -90,7 +90,6 @@ class Versioning {
             // Fallback if no tag found in history
             def fallbackHash = headCommit.getId().name().substring(0, 7)
             return "0.0.0-${fallbackHash}"
-
         } catch (Exception e) {
             System.err.println("Error determining version: " + e)
             return "0.0.0"
