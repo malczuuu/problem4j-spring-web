@@ -1,11 +1,13 @@
+import com.diffplug.spotless.LineEnding
+
 plugins {
     id "java-library"
     id "maven-publish"
-    id "com.diffplug.spotless" version "7.1.0"
-    id "net.nemerosa.versioning" version "3.1.0"
+    id "com.diffplug.spotless" version "7.2.1"
 }
 
 group = "com.github.malczuuu"
+
 
 /**
  * Conditional approach to versioning. If `-Pversion=...` is specified on the command line, it will be used as the
@@ -14,8 +16,7 @@ group = "com.github.malczuuu"
 if (project.hasProperty("version")) {
     version = project.property("version")
 } else {
-    def base = versioning.info.tag ?: "${versioning.info.lastTag}-${versioning.info.build}"
-    version = base + (versioning.info.dirty ? "-dirty" : "")
+    version = Versioning.getVersion(rootProject.rootDir)
 }
 
 java {
@@ -28,7 +29,7 @@ java {
 
 repositories {
     mavenCentral()
-    maven { url "https://jitpack.io/" }
+    maven { url = "https://jitpack.io/" }
 }
 
 dependencies {
@@ -58,8 +59,6 @@ publishing {
     }
 }
 
-import com.diffplug.spotless.LineEnding
-
 spotless {
     format "misc", {
         target "*.gradle", ".gitattributes", ".gitignore"
@@ -82,6 +81,19 @@ spotless {
 
         googleJavaFormat("1.28.0")
         lineEndings = LineEnding.UNIX
+    }
+
+    groovy {
+        target "src/**/*.groovy", "*.gradle"
+
+        greclipse()
+        lineEndings = LineEnding.UNIX
+    }
+}
+
+tasks.register("printVersion") {
+    doLast {
+        println "Project version: ${Versioning.getVersion(rootProject.rootDir)}"
     }
 }
 
