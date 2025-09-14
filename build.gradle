@@ -86,7 +86,7 @@ spotless {
     }
 
     groovy {
-        target "src/**/*.groovy", "*.gradle"
+        target "src/**/*.groovy"
 
         greclipse()
         lineEndings = LineEnding.UNIX
