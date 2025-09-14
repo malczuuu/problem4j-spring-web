@@ -1,5 +1,6 @@
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.lib.Ref
+import org.eclipse.jgit.lib.Repository
 import org.eclipse.jgit.revwalk.RevCommit
 import org.eclipse.jgit.revwalk.RevWalk
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder
@@ -10,59 +11,76 @@ import org.eclipse.jgit.storage.file.FileRepositoryBuilder
 class Versioning {
 
     /**
-     * Get the version of the project based on Git tags. If the current commit has a tag, return that tag.  If not,
-     * return the latest tag with the abbreviated commit hash. If no tags are found, return "0.0.0-<abbreviatedHash>".
+     * Get the version of the project based on Git tags.
+     * - If HEAD has a tag → return that tag.
+     * - Otherwise → return latest tag by commit history + abbreviated commit hash.
+     * - If no tags exist → return "0.0.0-<abbreviatedHash>".
      *
      * @param projectRootDir the root directory of the project (containing the .git directory)
      * @return the version string
      */
     static String getVersion(File projectRootDir) {
-        try {
-            def repository = new FileRepositoryBuilder()
-                    .setGitDir(new File(projectRootDir, ".git"))
-                    .readEnvironment()
-                    .findGitDir()
-                    .build()
+        try (
+                Repository repository = new FileRepositoryBuilder()
+                        .setGitDir(new File(projectRootDir, ".git"))
+                        .readEnvironment()
+                        .findGitDir()
+                        .build()
+                Git git = new Git(repository)
+        ) {
+            def headId = repository.resolve("HEAD")
+            if (headId == null) {
+                System.err.println("HEAD not found in repository")
+                return "0.0.0"
+            }
 
-            def git = new Git(repository)
+            RevCommit headCommit
+            try (RevWalk revWalk = new RevWalk(repository)) {
+                headCommit = revWalk.parseCommit(headId)
+            }
 
-            def headCommit = new RevWalk(repository).parseCommit(repository.resolve("HEAD"))
             def tags = git.tagList().call()
-
-            // ----------
-            // if no tags found, return 0.0.0-<abbreviatedHash>
             if (tags.isEmpty()) {
                 def hash = headCommit.id.name().substring(0, 7)
                 return "0.0.0-${hash}"
             }
 
-            // ----------
-            // check if there's a tag on the current HEAD and return it if found
-            def tagOnHead = tags.find {
-                Ref ref ->
-                    def commitId = ref.getPeeledObjectId() ?: ref.getObjectId()
-                    commitId == headCommit.id
+            // Check if HEAD is exactly on a tag
+            Ref tagOnHead = tags.find { ref ->
+                def commitId = ref.getPeeledObjectId() ?: ref.getObjectId()
+                commitId == headCommit.id
             }
             if (tagOnHead != null) {
                 return tagOnHead.getName().replaceAll('refs/tags/', '')
             }
 
-            // ----------
-            // find the latest tag by commit time and return <latestTag>-<abbreviatedHash>
-            def latestTag = tags.collect {
-                Ref ref ->
+            // Map each tag to the commit it points to
+            Map<Ref, RevCommit> tagToCommit = [:]
+            try (RevWalk revWalk = new RevWalk(repository)) {
+                tags.each { Ref ref ->
                     def commitId = ref.getPeeledObjectId() ?: ref.getObjectId()
-                    def commit = new RevWalk(repository).parseCommit(commitId)
-                    [ref: ref, commit: commit] as Map<String, RevCommit>
-            }.max {
-                it.commit.getCommitTime()
+                    RevCommit commit = revWalk.parseCommit(commitId)
+                    tagToCommit[ref] = commit
+                }
+
+                // Walk history from HEAD backwards
+                revWalk.markStart(headCommit)
+                for (RevCommit c : revWalk) {
+                    def tagRef = tagToCommit.find { it.value == c }?.key
+                    if (tagRef != null) {
+                        def tagName = tagRef.getName().replaceAll('refs/tags/', '')
+                        def abbrevHash = headCommit.getId().name().substring(0, 7)
+                        return "${tagName}-${abbrevHash}"
+                    }
+                }
             }
 
-            def tagName = latestTag.ref.getName().replaceAll('refs/tags/', '')
-            def abbrevHash = headCommit.getId().name().substring(0, 7)
+            // Fallback if no tag found in history
+            def fallbackHash = headCommit.getId().name().substring(0, 7)
+            return "0.0.0-${fallbackHash}"
 
-            return "${tagName}-${abbrevHash}"
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            System.err.println("Error determining version: " + e)
             return "0.0.0"
         }
     }
