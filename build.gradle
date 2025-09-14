@@ -1,9 +1,9 @@
 import com.diffplug.spotless.LineEnding
 
 plugins {
-    id "java-library"
-    id "maven-publish"
-    id "com.diffplug.spotless" version "7.2.1"
+    id("java-library")
+    id("maven-publish")
+    id("com.diffplug.spotless") version "7.2.1"
 }
 
 group = "com.github.malczuuu"
