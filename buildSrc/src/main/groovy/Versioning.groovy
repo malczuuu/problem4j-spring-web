@@ -1,7 +1,9 @@
 import org.eclipse.jgit.api.Git
+import org.eclipse.jgit.lib.ObjectId
 import org.eclipse.jgit.lib.Ref
 import org.eclipse.jgit.lib.Repository
 import org.eclipse.jgit.revwalk.RevCommit
+import org.eclipse.jgit.revwalk.RevTag
 import org.eclipse.jgit.revwalk.RevWalk
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder
 
@@ -47,8 +49,11 @@ class Versioning {
 
             // Check if HEAD is exactly on a tag
             Ref tagOnHead = tags.find { ref ->
-                def commitId = ref.getPeeledObjectId() ?: ref.getObjectId()
-                commitId == headCommit.id
+                try (RevWalk revWalk = new RevWalk(repository)) {
+                    RevTag revTag = revWalk.parseTag(ref.getObjectId());
+                    def commitId = revTag.getObject().getId();
+                    commitId == headCommit.id
+                }
             }
             if (tagOnHead != null) {
                 return tagOnHead.getName().replaceAll('refs/tags/', '')
