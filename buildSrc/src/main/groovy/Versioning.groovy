@@ -1,4 +1,5 @@
 import org.eclipse.jgit.api.Git
+import org.eclipse.jgit.errors.IncorrectObjectTypeException
 import org.eclipse.jgit.lib.ObjectId
 import org.eclipse.jgit.lib.Ref
 import org.eclipse.jgit.lib.Repository
@@ -50,8 +51,13 @@ class Versioning {
             // Check if HEAD is exactly on a tag
             Ref tagOnHead = tags.find { ref ->
                 try (RevWalk revWalk = new RevWalk(repository)) {
-                    RevTag revTag = revWalk.parseTag(ref.getObjectId());
-                    def commitId = revTag.getObject().getId();
+                    ObjectId commitId
+                    try {
+                        RevTag revTag = revWalk.parseTag(ref.objectId)
+                        commitId = revTag.getObject().getId()
+                    } catch (IncorrectObjectTypeException ignored) {
+                        commitId = ref.getObjectId()
+                    }
                     commitId == headCommit.id
                 }
             }
