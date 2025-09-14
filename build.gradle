@@ -66,6 +66,7 @@ spotless {
         trimTrailingWhitespace()
         leadingTabsToSpaces(4)
         endWithNewline()
+        lineEndings = LineEnding.UNIX
     }
 
     format "yaml", {
@@ -74,6 +75,7 @@ spotless {
         trimTrailingWhitespace()
         leadingTabsToSpaces(2)
         endWithNewline()
+        lineEndings = LineEnding.UNIX
     }
 
     java {
