@@ -8,7 +8,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 @SpringBootTest(classes = {JacksonAutoConfiguration.class, ProblemAutoConfiguration.class})
 @ExtendWith(SpringExtension.class)
-class ProblemAutoConfigurationTests {
+class ProblemAutoConfigurationTest {
 
   @Test
   void contextLoads() {}
