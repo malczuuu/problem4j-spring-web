@@ -1,23 +1,18 @@
 package io.github.malczuuu.problem4j.spring.web;
 
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies.KebabCaseStrategy;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies.LowerCaseStrategy;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies.UpperCamelCaseStrategy;
 import io.github.malczuuu.problem4j.core.Problem;
 import io.github.malczuuu.problem4j.core.ProblemBuilder;
 import io.github.malczuuu.problem4j.core.ProblemException;
+import io.github.malczuuu.problem4j.spring.web.formatting.DetailFormatting;
+import io.github.malczuuu.problem4j.spring.web.formatting.FieldNameFormatting;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.ConversionNotSupportedException;
 import org.springframework.beans.TypeMismatchException;
-import org.springframework.boot.autoconfigure.jackson.JacksonProperties;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -49,25 +44,24 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @RestControllerAdvice
 public class ProblemResponseEntityExceptionHandler extends ResponseEntityExceptionHandler {
 
-  private final JacksonProperties jacksonProperties;
-  private final ProblemProperties problemProperties;
-
-  private final List<ExceptionAdapter> adapters;
+  private final DetailFormatting detailFormatting;
+  private final FieldNameFormatting fieldNameFormatting;
+  private final List<ExceptionAdapter> exceptionAdapters;
 
   public ProblemResponseEntityExceptionHandler(
-      JacksonProperties jacksonProperties,
-      ProblemProperties problemProperties,
-      List<ExceptionAdapter> adapters) {
-    this.jacksonProperties = jacksonProperties;
-    this.problemProperties = problemProperties;
-    this.adapters = adapters;
+      DetailFormatting detailFormatting,
+      FieldNameFormatting fieldNameFormatting,
+      List<ExceptionAdapter> exceptionAdapters) {
+    this.detailFormatting = detailFormatting;
+    this.fieldNameFormatting = fieldNameFormatting;
+    this.exceptionAdapters = exceptionAdapters;
   }
 
   @ExceptionHandler({ProblemException.class})
   public ResponseEntity<Object> handleProblemException(ProblemException ex, WebRequest request) {
     Problem problem = ex.getProblem();
     HttpHeaders headers = new HttpHeaders();
-    HttpStatusCode status = HttpStatus.valueOf(problem.getStatus());
+    HttpStatus status = HttpStatus.valueOf(problem.getStatus());
     return handleExceptionInternal(ex, problem, headers, status, request);
   }
 
@@ -80,31 +74,37 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
             .map(
                 violation ->
                     new Violation(
-                        fieldName(fetchViolationProperty(violation)), violation.getMessage()))
+                        fieldNameFormatting.format(fetchViolationProperty(violation)),
+                        violation.getMessage()))
             .toList();
 
-    Problem problem =
+    ProblemBuilder builder =
         Problem.builder()
             .title(status.getReasonPhrase())
             .status(status.value())
-            .extension("errors", errors)
-            .build();
-    return handleExceptionInternal(ex, problem, new HttpHeaders(), status, request);
+            .title(detailFormatting.format("Validation failed"))
+            .extension("errors", errors);
+    return handleExceptionInternal(ex, builder.build(), new HttpHeaders(), status, request);
   }
 
   @ExceptionHandler({Exception.class})
   public ResponseEntity<Object> handleOtherException(Exception ex, WebRequest request) {
-    HttpStatusCode status = HttpStatus.INTERNAL_SERVER_ERROR;
-    Problem problem =
-        Problem.builder().title(getReasonPhrase(status)).status(status.value()).build();
-    return handleExceptionInternal(ex, problem, new HttpHeaders(), status, request);
+    HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
+    ProblemBuilder builder =
+        Problem.builder().title(status.getReasonPhrase()).status(status.value());
+    return handleExceptionInternal(ex, builder.build(), new HttpHeaders(), status, request);
   }
 
   private String getReasonPhrase(HttpStatusCode statusCode) {
+    if (statusCode instanceof HttpStatus status) {
+      return status.getReasonPhrase();
+    }
+
     HttpStatus status = HttpStatus.resolve(statusCode.value());
     if (status != null) {
       return status.getReasonPhrase();
     }
+
     return "";
   }
 
@@ -129,29 +129,8 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
       WebRequest request) {
     status = HttpStatus.METHOD_NOT_ALLOWED;
     ProblemBuilder builder =
-        Problem.builder()
-            .title(getReasonPhrase(status))
-            .status(status.value())
-            .detail(getMethodNotSupportedDetail(ex));
-    if (ex.getSupportedMethods() != null) {
-      builder.extension("supportedMethods", Arrays.asList(ex.getSupportedMethods()));
-    }
-    Problem problem = builder.build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
-  }
-
-  private String getMethodNotSupportedDetail(HttpRequestMethodNotSupportedException ex) {
-    String detailTemplate = "Method {} not supported";
-    detailTemplate = postProcessDetailTemplate(detailTemplate);
-    return detailTemplate.formatted(ex.getMethod());
-  }
-
-  private String postProcessDetailTemplate(String detailTemplate) {
-    return switch (problemProperties.getDefaultDetailFormat()) {
-      case DetailFormat.LOWERCASE -> detailTemplate.toLowerCase();
-      case DetailFormat.UPPERCASE -> detailTemplate.toUpperCase();
-      default -> detailTemplate;
-    };
+        Problem.builder().title(getReasonPhrase(status)).status(status.value());
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   @Override
@@ -161,20 +140,9 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
       HttpStatusCode status,
       WebRequest request) {
     status = HttpStatus.UNSUPPORTED_MEDIA_TYPE;
-    Problem problem =
-        Problem.builder()
-            .title(getReasonPhrase(status))
-            .status(status.value())
-            .detail(getMediaTypeNotSupportedDetail(ex))
-            .extension("supportedMediaTypes", new ArrayList<>(ex.getSupportedMediaTypes()))
-            .build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
-  }
-
-  private String getMediaTypeNotSupportedDetail(HttpMediaTypeNotSupportedException ex) {
-    String detailTemplate = "Media type {} not supported";
-    detailTemplate = postProcessDetailTemplate(detailTemplate);
-    return detailTemplate.formatted(ex.getContentType());
+    ProblemBuilder builder =
+        Problem.builder().title(getReasonPhrase(status)).status(status.value());
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   @Override
@@ -184,13 +152,9 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
       HttpStatusCode status,
       WebRequest request) {
     status = HttpStatus.NOT_ACCEPTABLE;
-    Problem problem =
-        Problem.builder()
-            .title(getReasonPhrase(status))
-            .status(status.value())
-            .extension("supportedMediaTypes", new ArrayList<>(ex.getSupportedMediaTypes()))
-            .build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
+    ProblemBuilder builder =
+        Problem.builder().title(getReasonPhrase(status)).status(status.value());
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   @Override
@@ -200,20 +164,13 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
       HttpStatusCode status,
       WebRequest request) {
     status = HttpStatus.BAD_REQUEST;
-    Problem problem =
+    ProblemBuilder builder =
         Problem.builder()
             .title(getReasonPhrase(status))
             .status(status.value())
-            .detail(getMissingPathVariableDetail(ex))
-            .extension("name", ex.getVariableName())
-            .build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
-  }
-
-  private String getMissingPathVariableDetail(MissingPathVariableException ex) {
-    String detailTemplate = "Missing {} path variable";
-    detailTemplate = postProcessDetailTemplate(detailTemplate);
-    return detailTemplate.formatted(ex.getVariableName());
+            .detail(detailFormatting.format("Missing path variable"))
+            .extension("name", ex.getVariableName());
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   @Override
@@ -223,22 +180,14 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
       HttpStatusCode status,
       WebRequest request) {
     status = HttpStatus.BAD_REQUEST;
-    Problem problem =
+    ProblemBuilder builder =
         Problem.builder()
             .title(getReasonPhrase(status))
             .status(status.value())
-            .detail(getMissingServletRequestParameterDetail(ex))
+            .detail(detailFormatting.format("Missing request param"))
             .extension("param", ex.getParameterName())
-            .extension("type", ex.getParameterType().toLowerCase())
-            .build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
-  }
-
-  private String getMissingServletRequestParameterDetail(
-      MissingServletRequestParameterException ex) {
-    String detailTemplate = "Missing {} request param of type {}";
-    detailTemplate = postProcessDetailTemplate(detailTemplate);
-    return detailTemplate.formatted(ex.getParameterName(), ex.getParameterType().toLowerCase());
+            .extension("type", ex.getParameterType().toLowerCase());
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   @Override
@@ -248,20 +197,13 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
       HttpStatusCode status,
       WebRequest request) {
     status = HttpStatus.BAD_REQUEST;
-    Problem problem =
+    ProblemBuilder builder =
         Problem.builder()
             .title(getReasonPhrase(status))
             .status(status.value())
-            .detail(getMissingServletRequestPartDetail(ex))
-            .extension("param", ex.getRequestPartName())
-            .build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
-  }
-
-  private String getMissingServletRequestPartDetail(MissingServletRequestPartException ex) {
-    String detailTemplate = "Missing {} request part";
-    detailTemplate = postProcessDetailTemplate(detailTemplate);
-    return detailTemplate.formatted(ex.getRequestPartName());
+            .detail(detailFormatting.format("Missing request part"))
+            .extension("param", ex.getRequestPartName());
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   @Override
@@ -271,13 +213,9 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
       HttpStatusCode status,
       WebRequest request) {
     status = HttpStatus.BAD_REQUEST;
-    Problem problem =
-        Problem.builder()
-            .title(getReasonPhrase(status))
-            .status(status.value())
-            .detail(ex.getMessage())
-            .build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
+    ProblemBuilder builder =
+        Problem.builder().title(getReasonPhrase(status)).status(status.value());
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   @Override
@@ -287,43 +225,26 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
       HttpStatusCode status,
       WebRequest request) {
     status = HttpStatus.BAD_REQUEST;
-    Problem problem =
-        from(ex.getBindingResult()).title(getReasonPhrase(status)).status(status.value()).build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
+    ProblemBuilder builder =
+        from(ex.getBindingResult()).title(getReasonPhrase(status)).status(status.value());
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   private ProblemBuilder from(BindingResult bindingResult) {
     ArrayList<Violation> details = new ArrayList<>();
     bindingResult
         .getFieldErrors()
-        .forEach(f -> details.add(new Violation(fieldName(f.getField()), f.getDefaultMessage())));
+        .forEach(
+            f ->
+                details.add(
+                    new Violation(
+                        fieldNameFormatting.format(f.getField()), f.getDefaultMessage())));
     bindingResult
         .getGlobalErrors()
         .forEach(g -> details.add(new Violation(null, g.getDefaultMessage())));
-    return Problem.builder().detail(getValidationFailedDetail()).extension("errors", details);
-  }
-
-  private String fieldName(String field) {
-    if (jacksonProperties.getPropertyNamingStrategy() == null) {
-      return field;
-    }
-    return switch (jacksonProperties.getPropertyNamingStrategy()) {
-      case "SNAKE_CASE" ->
-          ((SnakeCaseStrategy) PropertyNamingStrategies.SNAKE_CASE).translate(field);
-      case "UPPER_CAMEL_CASE" ->
-          ((UpperCamelCaseStrategy) PropertyNamingStrategies.UPPER_CAMEL_CASE).translate(field);
-      case "KEBAB_CASE" ->
-          ((KebabCaseStrategy) PropertyNamingStrategies.KEBAB_CASE).translate(field);
-      case "LOWER_CASE" ->
-          ((LowerCaseStrategy) PropertyNamingStrategies.LOWER_CASE).translate(field);
-      default -> field;
-    };
-  }
-
-  private String getValidationFailedDetail() {
-    String detailTemplate = "Validation failed";
-    detailTemplate = postProcessDetailTemplate(detailTemplate);
-    return detailTemplate;
+    return Problem.builder()
+        .detail(detailFormatting.format("Validation failed"))
+        .extension("errors", details);
   }
 
   @Override
@@ -341,18 +262,18 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
   protected ResponseEntity<Object> handleNoHandlerFoundException(
       NoHandlerFoundException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
     status = HttpStatus.NOT_FOUND;
-    Problem problem =
-        Problem.builder().title(getReasonPhrase(status)).status(status.value()).build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
+    ProblemBuilder builder =
+        Problem.builder().title(getReasonPhrase(status)).status(status.value());
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   @Override
   protected ResponseEntity<Object> handleNoResourceFoundException(
       NoResourceFoundException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
     status = HttpStatus.NOT_FOUND;
-    Problem problem =
-        Problem.builder().title(getReasonPhrase(status)).status(status.value()).build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
+    ProblemBuilder builder =
+        Problem.builder().title(getReasonPhrase(status)).status(status.value());
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   @Override
@@ -362,9 +283,9 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
       HttpStatusCode status,
       WebRequest request) {
     status = HttpStatus.INTERNAL_SERVER_ERROR;
-    Problem problem =
-        Problem.builder().title(getReasonPhrase(status)).status(status.value()).build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
+    ProblemBuilder builder =
+        Problem.builder().title(getReasonPhrase(status)).status(status.value());
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   @Override
@@ -385,9 +306,7 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
       }
     }
 
-    Problem problem = builder.build();
-
-    return handleExceptionInternal(ex, problem, headers, status, request);
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   @Override
@@ -397,20 +316,13 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
       HttpStatusCode status,
       WebRequest request) {
     status = HttpStatus.PAYLOAD_TOO_LARGE;
-    Problem problem =
+    ProblemBuilder builder =
         Problem.builder()
             .title(getReasonPhrase(status))
             .status(status.value())
-            .detail(getMaxUploadSizeExceededDetail())
-            .extension("maxUploadSize", ex.getMaxUploadSize())
-            .build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
-  }
-
-  private String getMaxUploadSizeExceededDetail() {
-    String detailTemplate = "Max upload size exceeded";
-    detailTemplate = postProcessDetailTemplate(detailTemplate);
-    return detailTemplate;
+            .detail(detailFormatting.format("Max upload size exceeded"))
+            .extension("max", ex.getMaxUploadSize());
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   @Override
@@ -420,31 +332,28 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
       HttpStatusCode status,
       WebRequest request) {
     status = HttpStatus.INTERNAL_SERVER_ERROR;
-    Problem problem =
-        Problem.builder().title(getReasonPhrase(status)).status(status.value()).build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
+    ProblemBuilder builder =
+        Problem.builder().title(getReasonPhrase(status)).status(status.value());
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   @Override
   protected ResponseEntity<Object> handleTypeMismatch(
       TypeMismatchException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
     status = HttpStatus.BAD_REQUEST;
-    ProblemBuilder problemBuilder =
+    ProblemBuilder builder =
         Problem.builder()
             .title(getReasonPhrase(status))
             .status(status.value())
-            .detail(getTypeMismatchDetail(ex));
-    if (ex.getRequiredType() != null) {
-      problemBuilder =
-          problemBuilder.extension("type", ex.getRequiredType().getSimpleName().toLowerCase());
-    }
-    return handleExceptionInternal(ex, problemBuilder.build(), headers, status, request);
-  }
+            .detail(detailFormatting.format("Type mismatch"));
 
-  private String getTypeMismatchDetail(TypeMismatchException ex) {
-    String detailTemplate = "Type mismatch of {} property";
-    detailTemplate = postProcessDetailTemplate(detailTemplate);
-    return detailTemplate.formatted(ex.getPropertyName());
+    if (ex.getPropertyName() != null) {
+      builder = builder.extension("property", ex.getPropertyName());
+    }
+    if (ex.getRequiredType() != null) {
+      builder = builder.extension("type", ex.getRequiredType().getSimpleName().toLowerCase());
+    }
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   @Override
@@ -454,9 +363,9 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
       HttpStatusCode status,
       WebRequest request) {
     status = HttpStatus.BAD_REQUEST;
-    Problem problem =
-        Problem.builder().title(getReasonPhrase(status)).status(status.value()).build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
+    ProblemBuilder builder =
+        Problem.builder().title(getReasonPhrase(status)).status(status.value());
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   @Override
@@ -466,17 +375,17 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
       HttpStatusCode status,
       WebRequest request) {
     status = HttpStatus.INTERNAL_SERVER_ERROR;
-    Problem problem =
-        Problem.builder().title(getReasonPhrase(status)).status(status.value()).build();
-    return handleExceptionInternal(ex, problem, headers, status, request);
+    ProblemBuilder builder =
+        Problem.builder().title(getReasonPhrase(status)).status(status.value());
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   @Override
   protected ResponseEntity<Object> handleMethodValidationException(
       MethodValidationException ex, HttpHeaders headers, HttpStatus status, WebRequest request) {
-    Problem body = Problem.builder().title(getReasonPhrase(status)).status(status.value()).build();
-    // TODO: debug how to extract validation violations
-    return handleExceptionInternal(ex, body, headers, status, request);
+    ProblemBuilder builder =
+        Problem.builder().title(getReasonPhrase(status)).status(status.value());
+    return handleExceptionInternal(ex, builder.build(), headers, status, request);
   }
 
   @Override
@@ -490,7 +399,7 @@ public class ProblemResponseEntityExceptionHandler extends ResponseEntityExcepti
     if (body instanceof Problem) {
       headers.setContentType(MediaType.APPLICATION_PROBLEM_JSON);
     }
-    adapters.forEach(e -> e.adapt(request, ex, finalBody));
+    exceptionAdapters.forEach(e -> e.adapt(request, ex, finalBody));
     return super.handleExceptionInternal(ex, body, headers, status, request);
   }
 }
