@@ -50,16 +50,6 @@ manager.
    <dependencies>
        <dependency>
            <groupId>com.github.malczuuu</groupId>
-           <artifactId>problem4j-core</artifactId>
-           <version>${problem4j-core.version}</version>
-       </dependency>
-       <dependency>
-           <groupId>com.github.malczuuu</groupId>
-           <artifactId>problem4j-jackson</artifactId>
-           <version>${problem4j-jackson.version}</version>
-       </dependency>
-       <dependency>
-           <groupId>com.github.malczuuu</groupId>
            <artifactId>problem4j-spring-web</artifactId>
            <version>${problem4j-spring-web.version}</version>
        </dependency>
@@ -71,8 +61,6 @@ manager.
        maven { url = uri("https://jitpack.io") }
    }
    dependencies {
-       implementation("com.github.malczuuu:problem4j-core:${problem4j-core.version}")
-       implementation("com.github.malczuuu:problem4j-jackson:${problem4j-jackson.version}")
        implementation("com.github.malczuuu:problem4j-spring-web:${problem4j-spring-web.version}")
    }
    ```
