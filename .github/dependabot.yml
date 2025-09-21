@@ -3,7 +3,7 @@ updates:
   - package-ecosystem: "gradle"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     open-pull-requests-limit: 5
     commit-message:
       prefix: "deps"
@@ -12,3 +12,9 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: [ "version-update:semver-minor", "version-update:semver-major" ]
+    groups:
+      all-patches:
+        patterns:
+          - "*"
+        update-types:
+          - "version-update:semver-patch"
