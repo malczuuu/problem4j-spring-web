@@ -12,11 +12,6 @@ model with exception handling in Spring Boot.
 This library extends default `ResponseEntityExceptionHandler` with `ProblemResponseEntityExceptionHandler`, which maps
 exceptions occurring in Spring controllers to `Problem` objects.
 
-`problem4j-spring-boot-extension` is a library that extends the functionality of `problem4j`, enabling automatic
-returning of `Problem` objects in HTTP responses instead of the default Spring Boot error responses. It is based on
-extending `ResponseEntityExceptionHandler` and uses Spring Boot's autoconfiguration mechanism, making integration quick
-and seamless.
-
 ## Table of Contents
 
 - [Features](#features)
