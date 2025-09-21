@@ -23,25 +23,35 @@ repositories {
     maven { url = uri("https://jitpack.io/") }
 }
 
+val jakartaServletVersion = "6.1.0"
+val jakartaValidationVersion = "3.1.1"
+val junitJupiterVersion = "5.13.4"
+val junitPlatformVersion = "1.13.4"
+val problem4jCoreVersion = "3.2.0-rc1"
+val problem4jJacksonVersion = "3.2.0-rc1"
+val slf4jVersion = "2.0.17"
+val springBootVersion = "3.5.5"
+val springFrameworkVersion = "6.2.10"
+
 dependencies {
-    api("org.springframework.boot:spring-boot-autoconfigure:3.5.5")
-    api("org.springframework:spring-webmvc:6.2.11")
-    api("org.slf4j:slf4j-api:2.0.17")
+    api("org.springframework.boot:spring-boot-autoconfigure:${springBootVersion}")
+    api("org.springframework:spring-webmvc:${springFrameworkVersion}")
+    api("org.slf4j:slf4j-api:${slf4jVersion}")
 
-    api("com.github.malczuuu:problem4j-core:3.2.0-rc1")
-    api("com.github.malczuuu:problem4j-jackson:3.2.0-rc1")
+    api("com.github.malczuuu:problem4j-core:${problem4jCoreVersion}")
+    api("com.github.malczuuu:problem4j-jackson:${problem4jJacksonVersion}")
 
-    compileOnly("jakarta.servlet:jakarta.servlet-api:6.1.0")
-    compileOnly("jakarta.validation:jakarta.validation-api:3.1.1")
-    annotationProcessor("org.springframework.boot:spring-boot-configuration-processor:3.5.5")
+    compileOnly("jakarta.servlet:jakarta.servlet-api:${jakartaServletVersion}")
+    compileOnly("jakarta.validation:jakarta.validation-api:${jakartaValidationVersion}")
+    annotationProcessor("org.springframework.boot:spring-boot-configuration-processor:${springBootVersion}")
 
-    testImplementation("jakarta.servlet:jakarta.servlet-api:6.1.0")
-    testImplementation("jakarta.validation:jakarta.validation-api:3.1.1")
-    testImplementation("org.junit.jupiter:junit-jupiter-api:5.13.4")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.13.4")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.13.4")
+    testImplementation("jakarta.servlet:jakarta.servlet-api:${jakartaServletVersion}")
+    testImplementation("jakarta.validation:jakarta.validation-api:${jakartaValidationVersion}")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:${junitJupiterVersion}")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:${junitJupiterVersion}")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:${junitPlatformVersion}")
 
-    testImplementation("org.springframework.boot:spring-boot-starter-test:3.5.5")
+    testImplementation("org.springframework.boot:spring-boot-starter-test:${springBootVersion}")
 }
 
 publishing {
