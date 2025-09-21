@@ -17,6 +17,15 @@ returning of `Problem` objects in HTTP responses instead of the default Spring B
 extending `ResponseEntityExceptionHandler` and uses Spring Boot's autoconfiguration mechanism, making integration quick
 and seamless.
 
+## Table of Contents
+
+- [Features](#features)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Extending behaviour via `ExceptionAdapter`](#extending-behaviour-via-exceptionadapter)
+- [Deprecations](#deprecations)
+- [Other Libraries](#other-libraries)
+
 ## Features
 
 - ✅ Automatic mapping of exceptions to responses with `Problem` objects compliant with [RFC 7807][rfc7807].
@@ -30,21 +39,43 @@ and seamless.
 This library is available through [Jitpack][jitpack] repository. Add it along with repository in your dependency
 manager.
 
-```groovy
-// build.gradle
-
-repositories {
-    // ...
-    maven { url = uri("https://jitpack.io") }
-}
-
-dependencies {
-    // ...
-    implementation("com.github.malczuuu:problem4j-core:<problem4j-core-version>")
-    implementation("com.github.malczuuu:problem4j-jackson:<problem4j-jackson-version>")
-    implementation("com.github.malczuuu:problem4j-spring-web:<problem4j-spring-web-version>")
-}
-```
+1. Maven:
+   ```xml
+   <repositories>
+       <repository>
+           <id>jitpack.io</id>
+           <url>https://jitpack.io</url>
+       </repository>
+   </repositories>
+   <dependencies>
+       <dependency>
+           <groupId>com.github.malczuuu</groupId>
+           <artifactId>problem4j-core</artifactId>
+           <version>${problem4j-core.version}</version>
+       </dependency>
+       <dependency>
+           <groupId>com.github.malczuuu</groupId>
+           <artifactId>problem4j-jackson</artifactId>
+           <version>${problem4j-jackson.version}</version>
+       </dependency>
+       <dependency>
+           <groupId>com.github.malczuuu</groupId>
+           <artifactId>problem4j-spring-web</artifactId>
+           <version>${problem4j-spring-web.version}</version>
+       </dependency>
+   </dependencies>
+   ```
+2. Gradle (Groovy or Kotlin DSL):
+   ```groovy
+   repositories {
+       maven { url = uri("https://jitpack.io") }
+   }
+   dependencies {
+       implementation("com.github.malczuuu:problem4j-core:${problem4j-core.version}")
+       implementation("com.github.malczuuu:problem4j-jackson:${problem4j-jackson.version}")
+       implementation("com.github.malczuuu:problem4j-spring-web:${problem4j-spring-web.version}")
+   }
+   ```
 
 ## Configuration
 
@@ -77,7 +108,6 @@ public class ExceptionStorageAdapter extends ExceptionAdapter {
         restErrorStorage.storeExceptionOccurrence(request, ex, body);
     }
 }
-
 ```
 
 ## Deprecations
@@ -85,10 +115,17 @@ public class ExceptionStorageAdapter extends ExceptionAdapter {
 1. Previous versions of `problem4j-spring-web` used `@EnableProblem` annotation to include beans in your codebase.
    Versions `3.1+` use Spring Boot autoconfiguration and this annotation was marked as deprecated.
 
-[rfc7807]: https://datatracker.ietf.org/doc/html/rfc7807
+## Other Libraries
+
+- [`problem4j-core`][problem4j-core] - Core library defining `Problem` model and `ProblemException`.
+- [`problem4j-jackson`][problem4j-jackson] - Jackson module for serializing and deserializing `Problem` objects.
+
+[jitpack]: https://jitpack.io/#malczuuu/problem4j-spring-web
 
 [problem4j]: https://github.com/malczuuu/problem4j
 
 [problem4j-core]: https://github.com/malczuuu/problem4j-core
 
-[jitpack]: https://jitpack.io/#malczuuu/problem4j-spring-web
+[problem4j-jackson]: https://github.com/malczuuu/problem4j-jackson
+
+[rfc7807]: https://datatracker.ietf.org/doc/html/rfc7807
