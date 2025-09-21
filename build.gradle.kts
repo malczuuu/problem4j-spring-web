@@ -25,7 +25,7 @@ repositories {
 
 dependencies {
     api("org.springframework.boot:spring-boot-autoconfigure:3.5.5")
-    api("org.springframework:spring-webmvc:6.2.10")
+    api("org.springframework:spring-webmvc:6.2.11")
     api("org.slf4j:slf4j-api:2.0.17")
 
     api("com.github.malczuuu:problem4j-core:3.2.0-rc1")
