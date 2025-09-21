@@ -30,8 +30,8 @@ val junitPlatformVersion = "1.13.4"
 val problem4jCoreVersion = "3.2.0-rc1"
 val problem4jJacksonVersion = "3.2.0-rc1"
 val slf4jVersion = "2.0.17"
-val springBootVersion = "3.5.5"
-val springFrameworkVersion = "6.2.10"
+val springBootVersion = "3.5.6"
+val springFrameworkVersion = "6.2.11"
 
 dependencies {
     api("org.springframework.boot:spring-boot-autoconfigure:${springBootVersion}")
