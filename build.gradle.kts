@@ -24,7 +24,7 @@ repositories {
 }
 
 dependencies {
-    api("org.springframework.boot:spring-boot-autoconfigure:3.5.5")
+    api("org.springframework.boot:spring-boot-autoconfigure:3.5.6")
     api("org.springframework:spring-webmvc:6.2.10")
     api("org.slf4j:slf4j-api:2.0.17")
 
@@ -33,7 +33,7 @@ dependencies {
 
     compileOnly("jakarta.servlet:jakarta.servlet-api:6.1.0")
     compileOnly("jakarta.validation:jakarta.validation-api:3.1.1")
-    annotationProcessor("org.springframework.boot:spring-boot-configuration-processor:3.5.5")
+    annotationProcessor("org.springframework.boot:spring-boot-configuration-processor:3.5.6")
 
     testImplementation("jakarta.servlet:jakarta.servlet-api:6.1.0")
     testImplementation("jakarta.validation:jakarta.validation-api:3.1.1")
@@ -41,7 +41,7 @@ dependencies {
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.13.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.13.4")
 
-    testImplementation("org.springframework.boot:spring-boot-starter-test:3.5.5")
+    testImplementation("org.springframework.boot:spring-boot-starter-test:3.5.6")
 }
 
 publishing {
